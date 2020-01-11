@@ -1,3 +1,8 @@
 debug_data
 .ipynb_checkpoints
-data
+
+
+data/age
+data/gender
+data/race
+data/UTKFace
