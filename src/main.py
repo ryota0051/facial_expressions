@@ -146,7 +146,7 @@ if __name__ == '__main__':
         'base_model_path': '../models/base_model.h5',
         'age_model_path': '../models/age_model.h5',
         'gender_model_path': '../models/gender_model.h5',
-        'race_model_path': '../models/race_model.h5',
+        'race_model_path': '../models/race_model_with_up_sampling.h5',
         'one_hot_vector_dict_path': '../models/one_hot_vector_dict.json'
     }
     capture_img(path_dict)
