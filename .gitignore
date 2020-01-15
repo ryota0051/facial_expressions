@@ -1,6 +1,6 @@
 debug_data
 .ipynb_checkpoints
-
+__pycache__
 
 data/age
 data/gender
