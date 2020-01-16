@@ -83,8 +83,9 @@ def __get_feature_extractor(path_dict: Dict[str, str]):
     age_model_path = path_dict['age_model_path']
     gender_model_path = path_dict['gender_model_path']
     race_model_path = path_dict['race_model_path']
+    emotion_model_path = path_dict['emotion_model_path']
     one_hot_vector_dict_path = path_dict['one_hot_vector_dict_path']
-    feature_extractor = FaceFeatureExtractor(base_model_path, age_model_path, gender_model_path, race_model_path, one_hot_vector_dict_path)
+    feature_extractor = FaceFeatureExtractor(base_model_path, age_model_path, gender_model_path, race_model_path, emotion_model_path, one_hot_vector_dict_path)
     return feature_extractor
 
 def __detect_face(cap: cv2.VideoCapture, cascade_classifier: cv2.CascadeClassifier) \
@@ -136,7 +137,7 @@ def __write_personal_info2img(base_img: np.array, personal_info_list: PERSONAL_I
     '''
     for (x, y, w, h) in personal_info_list:
         personal_info = personal_info_list[(x, y, w, h)]
-        txt = f'age: {personal_info["age"]}, gender: {personal_info["gender"]}, race: {personal_info["race"]}'
+        txt = f'age: {personal_info["age"]}, gender: {personal_info["gender"]}, race: {personal_info["race"]}, emotion: {personal_info["emotion"]}'
         cv2.rectangle(base_img, (x, y), (x+w, y+h), (0, 0, 255), thickness=2)
         cv2.putText(base_img, txt, (x-10, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
@@ -147,6 +148,7 @@ if __name__ == '__main__':
         'age_model_path': '../models/age_model.h5',
         'gender_model_path': '../models/gender_model.h5',
         'race_model_path': '../models/race_model_with_up_sampling.h5',
-        'one_hot_vector_dict_path': '../models/one_hot_vector_dict.json'
+        'emotion_model_path': '../models/emotion.h5',
+        'one_hot_vector_dict_path': '../models/one_hot_vector_dict.json',
     }
     capture_img(path_dict)

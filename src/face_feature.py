@@ -9,7 +9,7 @@ import numpy as np
 from type_def import BOUNDARY_BOX_TYPE, PERSONAL_INFO_TYPE
 
 class FaceFeatureExtractor():
-    def __init__(self, base_model_path: str, age_model_path: str, gender_model_path: str, race_model_path: str, one_hot_vector_dict_path: str) -> None:
+    def __init__(self, base_model_path: str, age_model_path: str, gender_model_path: str, race_model_path: str, emotion_model_path: str, one_hot_vector_dict_path: str) -> None:
         '''必要なファイルを読み込むインスタンスメソッド
         Parameter
         ----------
@@ -31,6 +31,7 @@ class FaceFeatureExtractor():
         self.age_model = self.__load_model(age_model_path)
         self.gender_model = self.__load_model(gender_model_path)
         self.race_model = self.__load_model(race_model_path)
+        self.emotion_model = self.__load_model(emotion_model_path)
         self.one_hot_vector_dict = self.__load_onde_hot_vector_dict(one_hot_vector_dict_path)
 
     def get_personal_data_from_faces(self, img_batch: np.array, rect_list: BOUNDARY_BOX_TYPE) -> PERSONAL_INFO_TYPE:
@@ -61,13 +62,16 @@ class FaceFeatureExtractor():
         age_list = self.age_model.predict_classes(feature).tolist()
         # 人種推定
         race_list = self.race_model.predict_classes(feature).tolist()
+        # 感情推定
+        emotion_list = self.emotion_model.predict_classes(feature).tolist()
 
         results = {}
-        for rect, gender, age, race in zip(rect_list, gender_list, age_list, race_list):
+        for rect, gender, age, race, emotion in zip(rect_list, gender_list, age_list, race_list, emotion_list):
             results[rect] = {}
             results[rect]['gender'] = self.one_hot_vector_dict['gender'][str(gender[0])]
             results[rect]['age'] = self.one_hot_vector_dict['age'][str(age)]
             results[rect]['race'] = self.one_hot_vector_dict['race'][str(race)]
+            results[rect]['emotion'] = self.one_hot_vector_dict['emotion'][str(emotion)]
         return results
 
     def __load_onde_hot_vector_dict(self, one_hot_vector_dict_path: str) -> Dict[str, Dict[str, str]]:

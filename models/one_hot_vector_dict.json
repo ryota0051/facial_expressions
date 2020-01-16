@@ -18,5 +18,13 @@
     "2": "Indian",
     "3": "others",
     "4": "White"
+  },
+  "emotion":{
+    "0": "anger",
+    "1": "disgust",
+    "2": "happiness",
+    "3": "neutral",
+    "4": "sadness",
+    "5": "surprise"
   }
 }
