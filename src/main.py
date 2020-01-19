@@ -31,10 +31,6 @@ def capture_img(path_dict: Dict[str, str], debug: bool = True, shape: Tuple[int,
     cap = cv2.VideoCapture(0)
     face_cascade = cv2.CascadeClassifier(FACE_CASCADE_PATH)
     feature_extractor = __get_feature_extractor(path_dict)
-    timer = {
-        'face_detect': [],
-        'feature': []
-    }
 
     try:
         while cap.isOpened():
