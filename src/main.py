@@ -9,11 +9,11 @@ import cv2
 import numpy as np
 
 from type_def import BOUNDARY_BOX_TYPE, PERSONAL_INFO_TYPE
-from face_feature import FaceFeatureExtractor
+from face_feature import FaceFeatureExtractor, FineTunedFaceFeatureExtractor
 
 FACE_CASCADE_PATH = os.path.join(cv2.data.haarcascades, 'haarcascade_frontalface_alt.xml')
 
-def capture_img(path_dict: Dict[str, str], debug: bool = True, shape: Tuple[int, int] = (150, 150)) -> None:
+def capture_img(path_dict: Dict[str, str], debug: bool = True, shape: Tuple[int, int] = (150, 150), fine_tuned=False) -> None:
     '''カメラで撮影した顔から個人の属性を抽出する関数
     Parameter
     ----------
@@ -30,11 +30,10 @@ def capture_img(path_dict: Dict[str, str], debug: bool = True, shape: Tuple[int,
     '''
     cap = cv2.VideoCapture(0)
     face_cascade = cv2.CascadeClassifier(FACE_CASCADE_PATH)
-    feature_extractor = __get_feature_extractor(path_dict)
-    timer = {
-        'face_detect': [],
-        'feature': []
-    }
+    if fine_tuned:
+        feature_extractor = __get_fine_tuned_model(path_dict)
+    else:
+        feature_extractor = __get_feature_extractor(path_dict)
 
     try:
         while cap.isOpened():
@@ -63,8 +62,8 @@ def capture_img(path_dict: Dict[str, str], debug: bool = True, shape: Tuple[int,
     except KeyboardInterrupt:
         logger.info('end')
 
-def __get_feature_extractor(path_dict: Dict[str, str]):
-    '''特徴抽出クラスをインスタンス化して返す関数
+def __get_feature_extractor(path_dict: Dict[str, str]) -> FaceFeatureExtractor:
+    '''モデルクラスをインスタンス化して返す関数
     Parameter
     ----------
     path_dict: 以下の形式の辞書
@@ -78,6 +77,7 @@ def __get_feature_extractor(path_dict: Dict[str, str]):
 
     Returns
     ----------
+    モデルクラス
     '''
     base_model_path = path_dict['base_model_path']
     age_model_path = path_dict['age_model_path']
@@ -87,6 +87,29 @@ def __get_feature_extractor(path_dict: Dict[str, str]):
     one_hot_vector_dict_path = path_dict['one_hot_vector_dict_path']
     feature_extractor = FaceFeatureExtractor(base_model_path, age_model_path, gender_model_path, race_model_path, emotion_model_path, one_hot_vector_dict_path)
     return feature_extractor
+
+def __get_fine_tuned_model(path_dict: Dict[str, str]):
+    '''転移学習済みのモデルクラスをインスタンス化して返す関数
+    Parameter
+    ----------
+    path_dict: 以下の形式の辞書
+        {
+            age_model_path: 年齢推定モデルのパス
+            gender_model_path: 性別推定モデルのパス
+            race_model_path: 人種推定モデルのパス
+            one_hot_vector_dict_path: 各モデルが出力するone-hot-vectorが表す文字列を格納したファイルのパス
+        }
+
+    Returns
+    ----------
+    転移学習済みのモデルクラス
+    '''
+    age_model_path = path_dict['age_model_path']
+    gender_model_path = path_dict['gender_model_path']
+    race_model_path = path_dict['race_model_path']
+    one_hot_vector_dict_path = path_dict['one_hot_vector_dict_path']
+    fine_tuned_model = FineTunedFaceFeatureExtractor(age_model_path, gender_model_path, race_model_path, one_hot_vector_dict_path)
+    return fine_tuned_model
 
 def __detect_face(cap: cv2.VideoCapture, cascade_classifier: cv2.CascadeClassifier) \
     -> Tuple[np.array, Union[Tuple[None], BOUNDARY_BOX_TYPE]]:
@@ -141,21 +164,36 @@ def __write_personal_info2img(base_img: np.array, personal_info_list: PERSONAL_I
         age_txt = f'age: {personal_info["age"]}'
         gender_txt = f'gender: {personal_info["gender"]}'
         race_txt = f'race: {personal_info["race"]}'
-        emotion_txt = f'emotion: {personal_info["emotion"]}'
+        if 'emotion' in personal_info:
+            emotion_txt = f'emotion: {personal_info["emotion"]}'
+            cv2.putText(base_img, emotion_txt, (x, y-70), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
         cv2.putText(base_img, age_txt, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
         cv2.putText(base_img, gender_txt, (x, y-30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
         cv2.putText(base_img, race_txt, (x, y-50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-        cv2.putText(base_img, emotion_txt, (x, y-70), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
 
 if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--fine', action='store_true')
+    args = parser.parse_args()
     logging.basicConfig(level=logging.DEBUG)
-    path_dict = {
-        'base_model_path': '../models/base_model.h5',
-        'age_model_path': '../models/age_model.h5',
-        'gender_model_path': '../models/gender_model.h5',
-        'race_model_path': '../models/race_model_with_up_sampling.h5',
-        'emotion_model_path': '../models/emotion.h5',
-        'one_hot_vector_dict_path': '../models/one_hot_vector_dict.json',
-    }
-    capture_img(path_dict)
+    if args.fine:
+        path_dict = {
+            'age_model_path': '../models/fine_tuned_models/fine_tuned_age_model.h5',
+            'gender_model_path': '../models/fine_tuned_models/fine_tuned_gender_model.h5',
+            'race_model_path': '../models/fine_tuned_models/fine_tuned_race_model.h5',
+            'one_hot_vector_dict_path': '../models/one_hot_vector_dict.json',
+        }
+        shape = (160, 160)
+    else:
+        path_dict = {
+            'base_model_path': '../models/base_model.h5',
+            'age_model_path': '../models/age_model.h5',
+            'gender_model_path': '../models/gender_model.h5',
+            'race_model_path': '../models/race_model_with_up_sampling.h5',
+            'emotion_model_path': '../models/emotion.h5',
+            'one_hot_vector_dict_path': '../models/one_hot_vector_dict.json',
+        }
+        shape = (150, 150)
+    capture_img(path_dict, fine_tuned=args.fine, shape=shape)
