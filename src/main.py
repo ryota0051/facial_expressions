@@ -137,9 +137,15 @@ def __write_personal_info2img(base_img: np.array, personal_info_list: PERSONAL_I
     '''
     for (x, y, w, h) in personal_info_list:
         personal_info = personal_info_list[(x, y, w, h)]
-        txt = f'age: {personal_info["age"]}, gender: {personal_info["gender"]}, race: {personal_info["race"]}, emotion: {personal_info["emotion"]}'
+        age_txt = f'age: {personal_info["age"]}'
+        gender_txt = f'gender: {personal_info["gender"]}'
+        race_txt = f'race: {personal_info["race"]}'
+        emotion_txt = f'emotion: {personal_info["emotion"]}'
+        cv2.putText(base_img, emotion_txt, (x, y-70), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        cv2.putText(base_img, age_txt, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        cv2.putText(base_img, gender_txt, (x, y-30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        cv2.putText(base_img, race_txt, (x, y-50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
         cv2.rectangle(base_img, (x, y), (x+w, y+h), (0, 0, 255), thickness=2)
-        cv2.putText(base_img, txt, (x-10, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
