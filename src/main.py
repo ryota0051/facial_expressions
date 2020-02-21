@@ -1,5 +1,6 @@
 import logging
 import os
+import pathlib
 from typing import Tuple, List, Union, Dict
 import time
 import pickle
@@ -11,9 +12,10 @@ import numpy as np
 from type_def import BOUNDARY_BOX_TYPE, PERSONAL_INFO_TYPE
 from face_feature import FaceFeatureExtractor
 
-FACE_CASCADE_PATH = os.path.join(cv2.data.haarcascades, 'haarcascade_frontalface_alt.xml')
+SCRIPT_PATH = pathlib.Path(__file__).resolve().parent
+FACE_CASCADE_PATH = '../cascade/haarcascade_frontalface_alt.xml'
 
-def capture_img(path_dict: Dict[str, str], debug: bool = True, shape: Tuple[int, int] = (150, 150)) -> None:
+def capture_img(path_dict: Dict[str, str], debug: bool = True, shape: Tuple[int, int] = (160, 160)) -> None:
     '''カメラで撮影した顔から個人の属性を抽出する関数
     Parameter
     ----------
@@ -29,7 +31,12 @@ def capture_img(path_dict: Dict[str, str], debug: bool = True, shape: Tuple[int,
     shape: 推論時に使用する画像サイズ
     '''
     cap = cv2.VideoCapture(0)
-    face_cascade = cv2.CascadeClassifier(FACE_CASCADE_PATH)
+    if not cap.isOpened():
+        raise RuntimeError('カメラが開けませんでした。')
+
+    assert os.path.exists(FACE_CASCADE_PATH), 'カスケード分類機{}がありません。'.format(FACE_CASCADE_PATH)
+    face_cascade = cv2.CascadeClassifier()
+    face_cascade.load(FACE_CASCADE_PATH)
     feature_extractor = __get_feature_extractor(path_dict)
 
     try:
@@ -49,7 +56,7 @@ def capture_img(path_dict: Dict[str, str], debug: bool = True, shape: Tuple[int,
             else:
                 logger.debug('no faces')
             elapsed_time = time.time() - all_start_time
-            fps = f'fps={(1 / elapsed_time):.2f}'
+            fps = 'fps={:.2f}'.format(1 / elapsed_time)
             if debug:
                 if results is not None:
                     __write_personal_info2img(img, results)
@@ -75,13 +82,7 @@ def __get_feature_extractor(path_dict: Dict[str, str]):
     Returns
     ----------
     '''
-    base_model_path = path_dict['base_model_path']
-    age_model_path = path_dict['age_model_path']
-    gender_model_path = path_dict['gender_model_path']
-    race_model_path = path_dict['race_model_path']
-    emotion_model_path = path_dict['emotion_model_path']
-    one_hot_vector_dict_path = path_dict['one_hot_vector_dict_path']
-    feature_extractor = FaceFeatureExtractor(base_model_path, age_model_path, gender_model_path, race_model_path, emotion_model_path, one_hot_vector_dict_path)
+    feature_extractor = FaceFeatureExtractor(**path_dict)
     return feature_extractor
 
 def __detect_face(cap: cv2.VideoCapture, cascade_classifier: cv2.CascadeClassifier) \
@@ -133,24 +134,15 @@ def __write_personal_info2img(base_img: np.array, personal_info_list: PERSONAL_I
     '''
     for (x, y, w, h) in personal_info_list:
         personal_info = personal_info_list[(x, y, w, h)]
-        age_txt = f'age: {personal_info["age"]}'
-        gender_txt = f'gender: {personal_info["gender"]}'
-        race_txt = f'race: {personal_info["race"]}'
-        emotion_txt = f'emotion: {personal_info["emotion"]}'
-        cv2.putText(base_img, emotion_txt, (x, y-70), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-        cv2.putText(base_img, age_txt, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-        cv2.putText(base_img, gender_txt, (x, y-30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-        cv2.putText(base_img, race_txt, (x, y-50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        nationality_txt = 'nationality: {}'.format(personal_info['nationality'])
+        cv2.putText(base_img, nationality_txt, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
         cv2.rectangle(base_img, (x, y), (x+w, y+h), (0, 0, 255), thickness=2)
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
     path_dict = {
-        'base_model_path': '../models/base_model.h5',
-        'age_model_path': '../models/age_model.h5',
-        'gender_model_path': '../models/gender_model.h5',
-        'race_model_path': '../models/race_model_with_up_sampling.h5',
-        'emotion_model_path': '../models/emotion.h5',
-        'one_hot_vector_dict_path': '../models/one_hot_vector_dict.json',
+        'base_model_path': '../models/mobile_net_base.h5',
+        'nationality_model_path': '../models/nationality_model.h5',
+        'label_path': '../labels.json',
     }
     capture_img(path_dict)

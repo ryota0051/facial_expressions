@@ -1,5 +1,5 @@
 import os
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 import json
 import time
 
@@ -9,15 +9,13 @@ import numpy as np
 from type_def import BOUNDARY_BOX_TYPE, PERSONAL_INFO_TYPE
 
 class FaceFeatureExtractor():
-    def __init__(self, base_model_path: str, age_model_path: str, gender_model_path: str, race_model_path: str, emotion_model_path: str, one_hot_vector_dict_path: str) -> None:
+    def __init__(self, base_model_path: str, nationality_model_path: str, label_path: str) -> None:
         '''必要なファイルを読み込むインスタンスメソッド
         Parameter
         ----------
         base_model_path: mobilenetV2の畳み込み部分のみのモデルパス
-        age_model_path: 年齢推定モデルのパス
-        gender_model_path: 性別推定モデルのパス
-        race_model_path: 人種推定モデルのパス
-        one_hot_vector_dict_path: 各モデルが出力するone-hot-vectorが表す文字列を格納したファイルのパス
+        nationality_model_path: 国籍モデルのパス
+        label_path: 各モデルが出力する数字が表す文字列を格納したファイルのパス
             ファイル内容の例:
             {
                 "gender": {
@@ -28,11 +26,8 @@ class FaceFeatureExtractor():
             }
         '''
         self.base_model = self.__load_model(base_model_path)
-        self.age_model = self.__load_model(age_model_path)
-        self.gender_model = self.__load_model(gender_model_path)
-        self.race_model = self.__load_model(race_model_path)
-        self.emotion_model = self.__load_model(emotion_model_path)
-        self.one_hot_vector_dict = self.__load_onde_hot_vector_dict(one_hot_vector_dict_path)
+        self.nationality_model = self.__load_model(nationality_model_path)
+        self.labels = self.__load_labels(label_path)
 
     def get_personal_data_from_faces(self, img_batch: np.array, rect_list: BOUNDARY_BOX_TYPE) -> PERSONAL_INFO_TYPE:
         '''顔画像データから性別、年齢、人種を判別するメソッド
@@ -50,35 +45,59 @@ class FaceFeatureExtractor():
             ...
         }
         '''
+        features = self.get_feature_batch(img_batch)
+        features = features.reshape(len(features), -1)
+
+        # 国籍判定
+        nationality_list = self.predict_facial_expression(features, self.nationality_model)
+
+        results = {}
+        for rect, nationality in zip(rect_list, nationality_list):
+            results[rect] = {}
+            results[rect]['nationality'] = self.labels['nationality'][str(nationality)]
+        return results
+
+    def get_feature_batch(self, img_batch: np.array) -> np.array:
+        '''ベースとなるモバイルネットからバッチ画像ごとに特徴量を抽出するメソッド
+
+        Parameter
+        ---------
+        img_batch: バッチ画像
+
+        Returns
+        ---------
+        モバイルネットが出力する特徴量
+        '''
         assert isinstance(img_batch, np.ndarray)
         assert img_batch.ndim == 4
         x = tf.keras.applications.mobilenet_v2.preprocess_input(img_batch)
-        start = time.time()
-        feature = self.base_model.predict(x).reshape(len(x), -1)
+        features = self.base_model.predict(x)
+        return features
 
-        # 性別推定
-        gender_list = self.gender_model.predict_classes(feature).tolist()
-        # 年齢推定
-        age_list = self.age_model.predict_classes(feature).tolist()
-        # 人種推定
-        race_list = self.race_model.predict_classes(feature).tolist()
-        # 感情推定
-        emotion_list = self.emotion_model.predict_classes(feature).tolist()
+    def predict_facial_expression(
+            self,
+            features: np.array,
+            model: '学習済み予測部分モデル') -> List[int]:
+        '''指定モデルにおける顔の属性を予測するメソッド
 
-        results = {}
-        for rect, gender, age, race, emotion in zip(rect_list, gender_list, age_list, race_list, emotion_list):
-            results[rect] = {}
-            results[rect]['gender'] = self.one_hot_vector_dict['gender'][str(gender[0])]
-            results[rect]['age'] = self.one_hot_vector_dict['age'][str(age)]
-            results[rect]['race'] = self.one_hot_vector_dict['race'][str(race)]
-            results[rect]['emotion'] = self.one_hot_vector_dict['emotion'][str(emotion)]
-        return results
+        Parameter
+        ---------
+        features: modelに入力する特徴量
+        model: 属性予測モデル(kerasのクラスラベルを返すメソッドである
+            predict_classesを用いているので、別のフレームワークを使う場合は、
+            classなどでラッパーする。)
 
-    def __load_onde_hot_vector_dict(self, one_hot_vector_dict_path: str) -> Dict[str, Dict[str, str]]:
+        Returns
+        ---------
+        要素として、予測結果の数値ラベルをもつリスト
+        '''
+        return model.predict_classes(features).tolist()
+
+    def __load_labels(self, label_path: str) -> Dict[str, Dict[str, str]]:
         '''json形式で記述されたファイルからone-hot-vectorが表す文字列辞書を取得するメソッド
         Parameter
         ----------
-        one_hot_vector_dict_path: one-hot-vectorが表す文字列辞書が記述されたjsonファイルのパス
+        label_path: 各モデルが出力するラベルが表す文字列辞書が記述されたjsonファイルのパス
 
         Returns
         ----------
@@ -107,10 +126,10 @@ class FaceFeatureExtractor():
               }
             }
         '''
-        self.__check_file_exists(one_hot_vector_dict_path)
-        with open(one_hot_vector_dict_path, 'r') as f:
-            one_hot_vector_dict = json.load(f)
-        return one_hot_vector_dict
+        self.__check_file_exists(label_path)
+        with open(label_path, 'r') as f:
+            labels = json.load(f)
+        return labels
 
     def __load_model(self, model_path:str) -> 'kerasのmodel':
         '''kerasモデルを読み込むメソッド
@@ -132,4 +151,4 @@ class FaceFeatureExtractor():
         file_path: 存在を確かめるファイル
         '''
         if not os.path.exists(file_path):
-            raise FileNotFoundError(f'[{file_path}]が存在しません。')
+            raise FileNotFoundError('[{}]が存在しません。'.format(file_path))
