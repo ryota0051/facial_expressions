@@ -39,11 +39,15 @@ class FaceFeatureExtractor():
         Returns
         ----------
         例:
-        {
-            (x1, y1, w1, h1): {"age": "20代", "gender": "male", "race": "Asian"},
-            (x2, y2, w2, h2): {"age": "30代", "gender": "male", "race": "Black"},
+        [
+            {
+                "coodinate": [x, y, W, H],
+                "attrributes": {
+                    "nationality": "japanese"
+                }
+            },
             ...
-        }
+        ]
         '''
         features = self.get_feature_batch(img_batch)
         features = features.reshape(len(features), -1)
@@ -51,11 +55,16 @@ class FaceFeatureExtractor():
         # 国籍判定
         nationality_list = self.predict_facial_expression(features, self.nationality_model)
 
-        results = {}
-        for rect, nationality in zip(rect_list, nationality_list):
-            results[rect] = {}
-            results[rect]['nationality'] = self.labels['nationality'][str(nationality)]
-        return results
+        result_list = [None] * len(rect_list)
+
+        assert len(rect_list) == len(nationality_list)
+
+        for i, (rect, nationality) in enumerate(zip(rect_list, nationality_list)):
+            result = {'coodinate': None, 'attribute': {}}
+            result['coodinate'] = list(rect)
+            result['attribute']['nationality'] = self.labels['nationality'][str(nationality)]
+            result_list[i] = result
+        return result_list
 
     def get_feature_batch(self, img_batch: np.array) -> np.array:
         '''ベースとなるモバイルネットからバッチ画像ごとに特徴量を抽出するメソッド

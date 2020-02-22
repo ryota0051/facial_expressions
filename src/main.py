@@ -4,6 +4,7 @@ import pathlib
 from typing import Tuple, List, Union, Dict
 import time
 import pickle
+import json
 logger = logging.getLogger()
 
 import cv2
@@ -11,21 +12,21 @@ import numpy as np
 
 from type_def import BOUNDARY_BOX_TYPE, PERSONAL_INFO_TYPE
 from face_feature import FaceFeatureExtractor
+from publisher.crient import Publisher
+from publisher.encoder import NumpyEncoder
 
 SCRIPT_PATH = pathlib.Path(__file__).resolve().parent
 FACE_CASCADE_PATH = '../cascade/haarcascade_frontalface_alt.xml'
 
-def capture_img(path_dict: Dict[str, str], debug: bool = True, shape: Tuple[int, int] = (160, 160)) -> None:
+def capture_img(model_path_dict: Dict[str, str], publisher: Publisher, debug: bool = True, shape: Tuple[int, int] = (160, 160)) -> None:
     '''カメラで撮影した顔から個人の属性を抽出する関数
     Parameter
     ----------
-    path_dict: 以下の形式の辞書
+    model_path_dict: 以下の形式の辞書
         {
             "base_model_path": mobilenetV2の畳み込み部分のみのモデルパス
-            "age_model_path": 年齢推定モデルのパス
-            "gender_model_path": 性別推定モデルのパス
-            "race_model_path": 人種推定モデルのパス
-            "one_hot_vector_dict_path": 各モデルが出力するone-hot-vectorが表す文字列を格納したファイルのパス
+            "nationality_model_path": 国籍モデルのパス
+            "label_path": 各モデルが出力する数字が表す文字列を格納したファイルのパス
         }
     debug: デバッグ用の画像を表示するか否か
     shape: 推論時に使用する画像サイズ
@@ -37,7 +38,7 @@ def capture_img(path_dict: Dict[str, str], debug: bool = True, shape: Tuple[int,
     assert os.path.exists(FACE_CASCADE_PATH), 'カスケード分類機{}がありません。'.format(FACE_CASCADE_PATH)
     face_cascade = cv2.CascadeClassifier()
     face_cascade.load(FACE_CASCADE_PATH)
-    feature_extractor = __get_feature_extractor(path_dict)
+    feature_extractor = __get_feature_extractor(model_path_dict)
 
     try:
         while cap.isOpened():
@@ -52,6 +53,8 @@ def capture_img(path_dict: Dict[str, str], debug: bool = True, shape: Tuple[int,
                     clipped_img_list.append(clipped_img)
                     rect_list.append((x, y, w, h))
                 results = feature_extractor.get_personal_data_from_faces(np.array(clipped_img_list), rect_list)
+                msg = json.dumps(results, cls=NumpyEncoder)
+                publisher.publish(msg=msg, topic_type='face_attribute_sending')
                 logger.info(results)
             else:
                 logger.debug('no faces')
@@ -67,11 +70,11 @@ def capture_img(path_dict: Dict[str, str], debug: bool = True, shape: Tuple[int,
     except KeyboardInterrupt:
         logger.info('end')
 
-def __get_feature_extractor(path_dict: Dict[str, str]):
+def __get_feature_extractor(model_path_dict: Dict[str, str]):
     '''特徴抽出クラスをインスタンス化して返す関数
     Parameter
     ----------
-    path_dict: 以下の形式の辞書
+    model_path_dict: 以下の形式の辞書
         {
             base_model_path: mobilenetV2の畳み込み部分のみのモデルパス
             age_model_path: 年齢推定モデルのパス
@@ -83,7 +86,7 @@ def __get_feature_extractor(path_dict: Dict[str, str]):
     Returns
     ----------
     '''
-    feature_extractor = FaceFeatureExtractor(**path_dict)
+    feature_extractor = FaceFeatureExtractor(**model_path_dict)
     return feature_extractor
 
 def __detect_face(cap: cv2.VideoCapture, cascade_classifier: cv2.CascadeClassifier) \
@@ -126,24 +129,31 @@ def __write_personal_info2img(base_img: np.array, personal_info_list: PERSONAL_I
     Parameter
     ----------
     base_img: 書き込み対象画像
-    personal_info_list: 以下の形式の辞書
-        {
-            (x1, y1, w1, h1): {"age": "20代", "gender": "male", "race": "Asian"},
-            (x2, y2, w2, h2): {"age": "30代", "gender": "male", "race": "Black"},
+    personal_info_list: 以下の形式の辞書coodinate_info
+        [
+            {
+                "coodinate": [x, y, W, H],
+                "attrributes": {
+                    "nationality": "japanese"
+                }
+            },
             ...
-        }
+        ]
     '''
-    for (x, y, w, h) in personal_info_list:
-        personal_info = personal_info_list[(x, y, w, h)]
-        nationality_txt = 'nationality: {}'.format(personal_info['nationality'])
+    for personal_info in personal_info_list:
+        coodinate_info = personal_info['coodinate']
+        x, y, w, h = coodinate_info[0], coodinate_info[1], coodinate_info[2], coodinate_info[3]
+        nationality_txt = 'nationality: {}'.format(personal_info['attribute']['nationality'])
         cv2.putText(base_img, nationality_txt, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
         cv2.rectangle(base_img, (x, y), (x+w, y+h), (0, 0, 255), thickness=2)
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
-    path_dict = {
+    model_path_dict = {
         'base_model_path': '../models/mobile_net_base.h5',
         'nationality_model_path': '../models/nationality_model.h5',
         'label_path': '../labels.json',
     }
-    capture_img(path_dict, False)
+    mqtt_setting_path = '../mqtt_setting.json'
+    publisher = Publisher(mqtt_setting_path)
+    capture_img(model_path_dict, publisher, False)
