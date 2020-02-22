@@ -52,11 +52,12 @@ def capture_img(path_dict: Dict[str, str], debug: bool = True, shape: Tuple[int,
                     clipped_img_list.append(clipped_img)
                     rect_list.append((x, y, w, h))
                 results = feature_extractor.get_personal_data_from_faces(np.array(clipped_img_list), rect_list)
-                logger.debug(results)
+                logger.info(results)
             else:
                 logger.debug('no faces')
             elapsed_time = time.time() - all_start_time
             fps = 'fps={:.2f}'.format(1 / elapsed_time)
+            logger.info('fps: {}'.format(fps))
             if debug:
                 if results is not None:
                     __write_personal_info2img(img, results)
@@ -145,4 +146,4 @@ if __name__ == '__main__':
         'nationality_model_path': '../models/nationality_model.h5',
         'label_path': '../labels.json',
     }
-    capture_img(path_dict)
+    capture_img(path_dict, False)
